@@ -1,0 +1,49 @@
+services:
+  
+  postgres:
+    image: postgres:15-alpine
+    
+    container_name: productivity-hub-db
+    
+    environment:
+      POSTGRES_DB: productivity_hub_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+
+    ports:
+      - "5432:5432"
+    
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s    # Check every 10 seconds
+      timeout: 5s      # Each check times out after 5 seconds
+      retries: 5       # Try 5 times before marking as unhealthy
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    
+    container_name: productivity-hub-pgadmin
+    
+    environment:
+      PGADMIN_DEFAULT_EMAIL: dev@productivity-hub.com
+      PGADMIN_DEFAULT_PASSWORD: devpassword
+      PGADMIN_LISTEN_PORT: 80
+    
+    ports:
+      - "8080:80"
+    
+    depends_on:
+      - postgres
+    
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+volumes:
+  postgres_data:     # Stores PostgreSQL database files
+  pgadmin_data:      # Stores pgAdmin configuration and settings

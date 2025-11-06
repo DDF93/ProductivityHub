@@ -1,0 +1,285 @@
+# ============================================================================
+# PRODUCTIVITY HUB - COMPREHENSIVE .GITIGNORE
+# React Native Mobile App + Node.js Backend
+# ============================================================================
+
+# ============================================================================
+# CRITICAL - SECRETS & ENVIRONMENT VARIABLES (NEVER COMMIT!)
+# ============================================================================
+.env
+.env.*
+.env.local
+.env.*.local
+**/.env
+**/.env.*
+productivity-hub-backend/.env*
+
+# ============================================================================
+# NODE.JS & DEPENDENCIES
+# ============================================================================
+node_modules/
+productivity-hub-backend/node_modules/
+
+# Package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Lock files (optional - some teams commit these, some don't)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ============================================================================
+# REACT NATIVE - METRO BUNDLER
+# ============================================================================
+.metro-health-check*
+metro-cache/
+
+# ============================================================================
+# REACT NATIVE - iOS
+# ============================================================================
+ios/build/
+ios/Pods/
+ios/*.xcworkspace
+!ios/*.xcworkspace/contents.xcworkspacedata
+!ios/*.xcworkspace/xcshareddata
+ios/DerivedData/
+ios/.xcode.env.local
+
+# Xcode
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods
+ios/Podfile.lock
+
+# ============================================================================
+# REACT NATIVE - ANDROID
+# ============================================================================
+android/app/build/
+android/build/
+android/.gradle/
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+
+# Android files
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+*.iml
+.gradle/
+*.keystore
+!debug.keystore
+*.hprof
+
+# ============================================================================
+# EXPO (if you add Expo later)
+# ============================================================================
+.expo/
+.expo-shared/
+dist/
+web-build/
+expo-env.d.ts
+
+# ============================================================================
+# TYPESCRIPT
+# ============================================================================
+*.tsbuildinfo
+.tsbuildinfo
+*.js.map
+
+# ============================================================================
+# BUILD OUTPUT
+# ============================================================================
+build/
+dist/
+out/
+.next/
+.nuxt/
+.cache/
+
+# Backend builds
+productivity-hub-backend/dist/
+productivity-hub-backend/build/
+
+# ============================================================================
+# LOGS
+# ============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Backend logs
+productivity-hub-backend/logs/
+productivity-hub-backend/*.log
+
+# ============================================================================
+# TESTING & COVERAGE
+# ============================================================================
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+__snapshots__/
+test-results/
+junit.xml
+
+# ============================================================================
+# DATABASE FILES
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# ============================================================================
+# IDE & EDITORS
+# ============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# IntelliJ / WebStorm / Android Studio
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+\#*\#
+.\#*
+
+# ============================================================================
+# OS GENERATED FILES
+# ============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+.DocumentRevisions-V100
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.directory
+.Trash-*
+.nfs*
+
+# ============================================================================
+# SECURITY - CERTIFICATES & KEYS (NEVER COMMIT!)
+# ============================================================================
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.p8
+*.mobileprovision
+*.jks
+google-services.json
+GoogleService-Info.plist
+
+# ============================================================================
+# TEMPORARY FILES
+# ============================================================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.orig.*
+*.rej
+
+# ============================================================================
+# MISC
+# ============================================================================
+
+# Archives (usually you don't want to commit these)
+*.zip
+*.tar.gz
+*.rar
+
+# React Native specific
+*.jsbundle
+.watchmanconfig
+
+# Buck build system
+buck-out/
+.buckconfig.local
+.buckd/
+
+# Ruby (for CocoaPods)
+vendor/bundle/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# History / Debug
+.history/
+
+# Prettier
+.prettierignore
+
+# ESLint
+.eslintcache
+
+# GraphQL
+schema.json
+*.graphql.ts
+
+# Sentry
+.sentryclirc
+
+# ============================================================================
+# PROJECT SPECIFIC - ADD YOUR CUSTOM IGNORES HERE
+# ============================================================================
