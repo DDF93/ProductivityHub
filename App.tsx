@@ -1,27 +1,54 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { Provider } from 'react-redux';
+import { store } from './src/store/store';
+import { TabNavigator } from './src/navigation';
+import { useAppSelector, useAppDispatch } from './src/hooks/redux';
+import { checkAuth } from './src/store/slices/authSlice';
+import { loadThemeFromStorage } from './src/store/slices/themeSlice';
+import LoginScreen from './src/screens/LoginScreen';
 
 function App() {
-  const isDarkMode = useColorScheme() === 'dark';
-
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <NewAppScreen templateFileName="App.tsx" />
-    </View>
+    <Provider store={store}>
+      <AppContent />
+    </Provider>
   );
 }
 
+function AppContent() {
+  const dispatch = useAppDispatch();
+  const { isAuthenticated, isInitialized } = useAppSelector(state => state.auth);
+  const theme = useAppSelector(state => state.theme.currentTheme);
+  
+  useEffect(() => {
+    dispatch(checkAuth());
+    dispatch(loadThemeFromStorage());
+  }, []);
+  
+  if (!isInitialized) {
+    return (
+      <View style={[
+        styles.loadingContainer,
+        { backgroundColor: theme.colors.background }
+      ]}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
+      </View>
+    );
+  }
+  
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
+  
+  return <TabNavigator />;
+}
+
 const styles = StyleSheet.create({
-  container: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
