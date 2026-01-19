@@ -78,6 +78,7 @@ android/build/
 android/.gradle/
 android/captures/
 android/.externalNativeBuild/
+android/app/.cxx/   
 android/.cxx/
 
 # Android files

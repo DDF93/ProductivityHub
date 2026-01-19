@@ -10,16 +10,28 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { AuthStackParamList } from '../navigation/AuthNavigator';
+
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { login, clearError } from '../store/slices/authSlice';
 
-function LoginScreen() {
+// ✅ FIXED - All on one line
+type LoginScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Login'>;
+
+type LoginScreenProps = {
+  navigation: LoginScreenNavigationProp;
+};
+
+function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
   const dispatch = useAppDispatch();
-  const { isLoading, error } = useAppSelector(state => state.auth);
-  const theme = useAppSelector(state => state.theme.currentTheme);
+  
+  // ✅ FIXED - Added explicit type annotation
+  const { isLoading, error } = useAppSelector((state) => state.auth);
+  const theme = useAppSelector((state) => state.theme.currentTheme);
   
   const handleLogin = async () => {
     dispatch(clearError());
@@ -130,6 +142,20 @@ function LoginScreen() {
             <Text style={styles.loginButtonText}>Login</Text>
           )}
         </TouchableOpacity>
+        
+        <View style={styles.registerContainer}>
+          <Text style={[styles.registerText, { color: theme.colors.textSecondary }]}>
+            Don't have an account?
+          </Text>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Register')}
+            disabled={isLoading}
+          >
+            <Text style={[styles.registerLink, { color: theme.colors.accent }]}>
+              {' '}Sign up
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -195,6 +221,18 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
+    fontWeight: '600',
+  },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  registerText: {
+    fontSize: 16,
+  },
+  registerLink: {
+    fontSize: 16,
     fontWeight: '600',
   },
 });
