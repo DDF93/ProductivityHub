@@ -3,48 +3,48 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Alert } fr
 import { TabNavigationProp } from '../types/NavigationTypes';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 
-// Theme management imports
-import { enableTheme, disableTheme, saveEnabledThemesToStorage } from '../store/slices/themeSlice';
+import { 
+  enableThemeOnServer,      // NEW: API-backed theme enable
+  disableThemeOnServer,     // NEW: API-backed theme disable
+} from '../store/slices/themeSlice';
 import { canDisableTheme, isThemeEnabled } from '../utils/themeUtils';
 
-// Plugin management imports
 import { 
-  enablePlugin, 
-  disablePlugin, 
-  saveEnabledPluginsToStorage,
-  loadEnabledPluginsFromStorage 
+  enablePlugin,                    // Still used for immediate UI update (local)
+  disablePlugin,                   // Still used for immediate UI update (local)
+  enablePluginOnServer,            // NEW: Syncs to server
+  disablePluginOnServer,           // NEW: Syncs to server
+  loadEnabledPluginsFromAPI        // NEW: Load from server on startup
 } from '../store/slices/pluginSlice';
+
 import { PluginItem } from '../types/PluginTypes';
 
 const styles = StyleSheet.create({
-    // Main screen styles
     pluginContainer: {
         flex: 1,
         padding: 20,
     },
     headerSection: {
         alignItems: 'center',
-        marginBottom: 8,         // Reduced from 15
+        marginBottom: 8,
     },
     pluginTitle: {
-        fontSize: 22,            // Reduced from 28
+        fontSize: 22,
         fontWeight: 'bold',
-        marginBottom: 4,         // Reduced from 8
+        marginBottom: 4,
     },
     pluginDescription: {
-        fontSize: 14,            // Reduced from 16
+        fontSize: 14,
         textAlign: 'center',
-        marginBottom: 10,        // Reduced from 20
-        opacity: 0.7,            // Make it more subtle
+        marginBottom: 10,
+        opacity: 0.7,
     },
     sectionTitle: {
         fontSize: 20,
         fontWeight: 'bold',
         marginBottom: 16,
-        marginTop: 10,           // Reduced from 20
+        marginTop: 10,
     },
-    
-    // Plugin launcher styles
     pluginGrid: {
         flex: 1,
     },
@@ -80,17 +80,15 @@ const styles = StyleSheet.create({
         fontSize: 14,
         opacity: 0.8,
     },
-    
-    // Management buttons
     managementSection: {
-        marginTop: 15,           // Reduced from 20
-        flexDirection: 'row',    // Side-by-side layout
-        gap: 12,                 // Space between buttons
+        marginTop: 15,
+        flexDirection: 'row',
+        gap: 12,
     },
     managementButton: {
-        flex: 1,                 // Each button takes 50% width
-        paddingVertical: 12,     // Reduced from 16
-        paddingHorizontal: 16,   // Reduced from 24
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
         borderRadius: 12,
         borderWidth: 2,
         alignItems: 'center',
@@ -98,13 +96,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     managementButtonText: {
-        fontSize: 16,            // Reduced from 18
+        fontSize: 16,
         fontWeight: '600',
         marginLeft: 8,
-        textAlign: 'center',     // Center text in smaller buttons
+        textAlign: 'center',
     },
-    
-    // Modal styles
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -137,8 +133,6 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
     },
-    
-    // Theme/Plugin management styles
     themeItem: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -189,12 +183,10 @@ type PluginListScreenProps = {
 };
 
 function PluginListScreen({ navigation }: PluginListScreenProps) {
-    // Theme state (existing)
     const theme = useAppSelector(state => state.theme.currentTheme);
     const availableThemes = useAppSelector(state => state.theme.availableThemes);
     const enabledThemes = useAppSelector(state => state.theme.enabledThemes);
     
-    // Plugin state from Redux
     const availablePlugins = useAppSelector(state => state.plugins.availablePlugins);
     const enabledPluginIds = useAppSelector(state => state.plugins.enabledPluginIds);
     const pluginLoading = useAppSelector(state => state.plugins.isLoading);
@@ -202,23 +194,24 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
     
     const dispatch = useAppDispatch();
 
-    // Modal state
     const [themeManagementVisible, setThemeManagementVisible] = useState(false);
     const [pluginManagementVisible, setPluginManagementVisible] = useState(false);
 
-    // Load enabled plugins on component mount
+    
     useEffect(() => {
-        dispatch(loadEnabledPluginsFromStorage());
+        dispatch(loadEnabledPluginsFromAPI());
+        
+        
     }, [dispatch]);
 
-    // Get enabled plugin objects (convert IDs to full objects)
     const enabledPlugins = availablePlugins.filter(plugin => 
         enabledPluginIds.includes(plugin.id)
     );
 
-    // Plugin toggle handler
-    const handlePluginToggle = (pluginId: string, currentlyEnabled: boolean) => {
+    
+    const handlePluginToggle = async (pluginId: string, currentlyEnabled: boolean) => {
         if (currentlyEnabled) {
+            
             const pluginName = availablePlugins.find(p => p.id === pluginId)?.name;
             
             Alert.alert(
@@ -229,24 +222,55 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
                     { 
                         text: "Disable", 
                         style: "destructive",
-                        onPress: () => {
+                        onPress: async () => {
                             dispatch(disablePlugin(pluginId));
-                            const updatedEnabledPlugins = enabledPluginIds.filter(id => id !== pluginId);
-                            dispatch(saveEnabledPluginsToStorage(updatedEnabledPlugins));
+                            
+                            try {
+                                await dispatch(disablePluginOnServer(pluginId)).unwrap();
+                                console.log(`✅ Plugin ${pluginId} disabled on server`);
+                                
+                            } catch (error) {
+                                console.error('❌ Failed to disable plugin on server:', error);
+                                
+                                dispatch(enablePlugin(pluginId));
+                                
+                                Alert.alert(
+                                    'Sync Failed',
+                                    'Could not disable plugin on server. Try again when online.'
+                                );
+                            }
                         }
                     }
                 ]
             );
+            
         } else {
-            // Enable immediately
+            
             dispatch(enablePlugin(pluginId));
-            const updatedEnabledPlugins = [...enabledPluginIds, pluginId];
-            dispatch(saveEnabledPluginsToStorage(updatedEnabledPlugins));
+            
+            try {
+                await dispatch(enablePluginOnServer({ 
+                    pluginId,
+                    settings: {}
+                })).unwrap();
+                
+                console.log(`✅ Plugin ${pluginId} enabled on server`);
+                
+            } catch (error) {
+                console.error('❌ Failed to enable plugin on server:', error);
+                
+                dispatch(disablePlugin(pluginId));
+                
+                Alert.alert(
+                    'Sync Failed',
+                    'Could not enable plugin on server. Try again when online.'
+                );
+            }
         }
     };
 
-    // Theme toggle handler (existing)
-    const handleThemeToggle = (themeId: string, currentlyEnabled: boolean) => {
+    
+    const handleThemeToggle = async (themeId: string, currentlyEnabled: boolean) => {
         if (currentlyEnabled) {
             const themeName = availableThemes.find(t => t.id === themeId)?.name;
             
@@ -258,27 +282,43 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
                     { 
                         text: "Disable", 
                         style: "destructive",
-                        onPress: () => {
-                            dispatch(disableTheme(themeId));
-                            const updatedEnabledThemes = enabledThemes.filter(id => id !== themeId);
-                            dispatch(saveEnabledThemesToStorage(updatedEnabledThemes));
+                        onPress: async () => {
+                            
+                            try {
+                                await dispatch(disableThemeOnServer(themeId)).unwrap();
+                                console.log(`✅ Theme ${themeId} disabled on server`);
+                                
+                            } catch (error) {
+                                console.error('❌ Failed to disable theme on server:', error);
+                                Alert.alert(
+                                    'Sync Failed',
+                                    'Could not disable theme on server. Try again when online.'
+                                );
+                            }
                         }
                     }
                 ]
             );
         } else {
-            dispatch(enableTheme(themeId));
-            const updatedEnabledThemes = [...enabledThemes, themeId];
-            dispatch(saveEnabledThemesToStorage(updatedEnabledThemes));
+            
+            try {
+                await dispatch(enableThemeOnServer(themeId)).unwrap();
+                console.log(`✅ Theme ${themeId} enabled on server`);
+                
+            } catch (error) {
+                console.error('❌ Failed to enable theme on server:', error);
+                Alert.alert(
+                    'Sync Failed',
+                    'Could not enable theme on server. Try again when online.'
+                );
+            }
         }
     };
 
-    // Helper function to check if plugin is enabled
     const isPluginEnabled = (pluginId: string) => {
         return enabledPluginIds.includes(pluginId);
     };
 
-    // Theme helper functions (existing)
     const getThemeIcon = (themeId: string) => {
         switch (themeId) {
             case 'light-default': return '☀️';
@@ -301,9 +341,9 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
         }
     };
 
+    
     return (
         <View style={[styles.pluginContainer, {backgroundColor: theme.colors.background}]}>
-            {/* Header Section - Reduced size */}
             <View style={styles.headerSection}>
                 <Text style={[styles.pluginDescription, {color: theme.colors.textSecondary}]}>
                     Launch plugins and manage themes
@@ -311,7 +351,6 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
             </View>
 
             <ScrollView style={styles.pluginGrid} showsVerticalScrollIndicator={false}>
-                {/* Active Plugins Section */}
                 <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>
                     🚀 Active Plugins
                 </Text>
@@ -352,7 +391,6 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
                                 }
                             ]}
                             onPress={() => {
-                                // TODO: Launch plugin when you build actual plugins
                                 console.log(`Launching plugin: ${plugin.name}`);
                             }}
                         >
@@ -375,9 +413,7 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
                 )}
             </ScrollView>
 
-            {/* Management Section */}
             <View style={styles.managementSection}>
-                {/* Theme Management Button */}
                 <TouchableOpacity
                     style={[
                         styles.managementButton,
@@ -394,7 +430,6 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
                     </Text>
                 </TouchableOpacity>
 
-                {/* Plugin Management Button */}
                 <TouchableOpacity
                     style={[
                         styles.managementButton,
@@ -412,7 +447,6 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
                 </TouchableOpacity>
             </View>
 
-            {/* Theme Management Modal */}
             <Modal
                 visible={themeManagementVisible}
                 transparent={true}
@@ -524,7 +558,7 @@ function PluginListScreen({ navigation }: PluginListScreenProps) {
                 </View>
             </Modal>
 
-            {/* Plugin Management Modal */}
+            {/* Plugin Management Modal - (rendering code unchanged, just using new handlers) */}
             <Modal
                 visible={pluginManagementVisible}
                 transparent={true}

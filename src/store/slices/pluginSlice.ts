@@ -1,7 +1,11 @@
-// src/store/slices/pluginSlice.ts
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { PluginItem } from '../../types/PluginTypes';
 import { StorageService } from '../../services/storageService';
+
+import { pluginService } from '../../services/api/pluginService';
+
+import { themeService } from '../../services/api/themeService';
+
 
 interface PluginState {
   availablePlugins: PluginItem[];      // All plugins that exist
@@ -10,7 +14,6 @@ interface PluginState {
   error: string | null;                // Store error messages
 }
 
-// Sample plugins - you'll replace these with real plugins later
 const samplePlugins: PluginItem[] = [
   {
     id: 'workout-tracker',
@@ -33,39 +36,121 @@ const samplePlugins: PluginItem[] = [
 ];
 
 const initialState: PluginState = {
-  availablePlugins: samplePlugins,     // Start with sample plugins
-  enabledPluginIds: [],                // No plugins enabled initially
+  availablePlugins: samplePlugins,
+  enabledPluginIds: [],
   isLoading: false,
   error: null,
 };
 
-// Load enabled plugins from storage on app startup
-export const loadEnabledPluginsFromStorage = createAsyncThunk(
+
+
+
+const loadEnabledPluginsFromAPI = createAsyncThunk(
   'plugins/loadEnabledPlugins',
-  async () => {
-    const savedEnabledPlugins = await StorageService.loadEnabledPlugins();
-    return savedEnabledPlugins || []; // Empty array if no saved plugins
+  async (_, { rejectWithValue }) => {
+    
+    try {
+      const preferences = await themeService.getUserPreferences();
+      
+      const enabledPluginIds = preferences.plugins.enabled.map(p => p.id);
+      
+      return enabledPluginIds;  // e.g., ['workout-tracker', 'nutrition-logger']
+      
+    } catch (error: any) {
+      console.error('Failed to load plugins from API:', error);
+      
+      try {
+        console.log('Falling back to local plugin storage...');
+        
+        const savedPlugins = await StorageService.loadEnabledPlugins();
+        return savedPlugins || [];
+        
+      } catch (storageError) {
+        console.error('Storage fallback also failed:', storageError);
+        return rejectWithValue('Failed to load enabled plugins');
+      }
+    }
   }
 );
 
-// Save enabled plugins to storage
-export const saveEnabledPluginsToStorage = createAsyncThunk(
-  'plugins/saveEnabledPlugins', 
-  async (enabledPluginIds: string[]) => {
-    await StorageService.saveEnabledPlugins(enabledPluginIds);
-    return enabledPluginIds;
+
+const enablePluginOnServer = createAsyncThunk(
+  'plugins/enablePlugin',
+  async ({ pluginId, settings = {} }: { pluginId: string; settings?: any }, { rejectWithValue }) => {
+    
+    try {
+      await pluginService.enablePlugin(pluginId, settings);
+      
+      try {
+        const currentEnabled = await StorageService.loadEnabledPlugins() || [];
+        
+        if (!currentEnabled.includes(pluginId)) {
+          const updatedEnabled = [...currentEnabled, pluginId];
+          await StorageService.saveEnabledPlugins(updatedEnabled);
+        }
+      } catch (storageError) {
+        console.warn('Failed to cache plugin locally:', storageError);
+      }
+      
+      return pluginId;
+      
+    } catch (error: any) {
+      console.error('Failed to enable plugin on server:', error);
+      return rejectWithValue('Failed to enable plugin');
+    }
   }
 );
+
+
+const disablePluginOnServer = createAsyncThunk(
+  'plugins/disablePlugin',
+  async (pluginId: string, { rejectWithValue }) => {
+    try {
+      await pluginService.disablePlugin(pluginId);
+      
+      try {
+        const currentEnabled = await StorageService.loadEnabledPlugins() || [];
+        const updatedEnabled = currentEnabled.filter(id => id !== pluginId);
+        await StorageService.saveEnabledPlugins(updatedEnabled);
+      } catch (storageError) {
+        console.warn('Failed to remove plugin from local storage:', storageError);
+      }
+      
+      return pluginId;
+      
+    } catch (error: any) {
+      console.error('Failed to disable plugin on server:', error);
+      return rejectWithValue('Failed to disable plugin');
+    }
+  }
+);
+
+
+const updatePluginSettingsOnServer = createAsyncThunk(
+  'plugins/updateSettings',
+  async ({ pluginId, settings }: { pluginId: string; settings: any }, { rejectWithValue }) => {
+    
+    try {
+      await pluginService.updatePluginSettings(pluginId, settings);
+      
+      return { pluginId, settings };
+      
+    } catch (error: any) {
+      console.error('Failed to update plugin settings on server:', error);
+      return rejectWithValue('Failed to update plugin settings');
+    }
+  }
+);
+
 
 const pluginSlice = createSlice({
   name: 'plugins',
   initialState,
+  
   reducers: {
-    // Enable a plugin (add to user's enabled collection)
     enablePlugin: (state, action: PayloadAction<string>) => {
       const pluginId = action.payload;
       
-      // Check plugin exists and isn't already enabled
       const pluginExists = state.availablePlugins.some(plugin => plugin.id === pluginId);
       const alreadyEnabled = state.enabledPluginIds.includes(pluginId);
       
@@ -75,21 +160,16 @@ const pluginSlice = createSlice({
       }
     },
     
-    // Disable a plugin (remove from user's enabled collection)
     disablePlugin: (state, action: PayloadAction<string>) => {
       const pluginId = action.payload;
-      
-      // Remove from enabled list
       state.enabledPluginIds = state.enabledPluginIds.filter(id => id !== pluginId);
       state.error = null;
     },
     
-    // Add a new plugin to available plugins (for future when you build new plugins)
     addPlugin: (state, action: PayloadAction<PluginItem>) => {
       state.availablePlugins.push(action.payload);
     },
     
-    // Clear any error messages
     clearPluginError: (state) => {
       state.error = null;
     },
@@ -97,40 +177,79 @@ const pluginSlice = createSlice({
   
   extraReducers: (builder) => {
     builder
-      // Handle loading enabled plugins from storage
-      .addCase(loadEnabledPluginsFromStorage.pending, (state) => {
+      .addCase(loadEnabledPluginsFromAPI.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(loadEnabledPluginsFromStorage.fulfilled, (state, action) => {
+      .addCase(loadEnabledPluginsFromAPI.fulfilled, (state, action) => {
         state.isLoading = false;
         state.enabledPluginIds = action.payload;
       })
-      .addCase(loadEnabledPluginsFromStorage.rejected, (state, action) => {
+      .addCase(loadEnabledPluginsFromAPI.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.error.message || 'Failed to load enabled plugins';
+        state.error = action.payload as string || 'Failed to load enabled plugins';
       })
       
-      // Handle saving enabled plugins to storage
-      .addCase(saveEnabledPluginsToStorage.pending, (state) => {
+      .addCase(enablePluginOnServer.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
-      .addCase(saveEnabledPluginsToStorage.fulfilled, (state) => {
+      .addCase(enablePluginOnServer.fulfilled, (state, action) => {
+        state.isLoading = false;
+        
+        const pluginId = action.payload;
+        
+        if (!state.enabledPluginIds.includes(pluginId)) {
+          state.enabledPluginIds.push(pluginId);
+        }
+      })
+      .addCase(enablePluginOnServer.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string || 'Failed to enable plugin';
+      })
+      
+      .addCase(disablePluginOnServer.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(disablePluginOnServer.fulfilled, (state, action) => {
+        state.isLoading = false;
+        
+        const pluginId = action.payload;
+        
+        state.enabledPluginIds = state.enabledPluginIds.filter(id => id !== pluginId);
+      })
+      .addCase(disablePluginOnServer.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string || 'Failed to disable plugin';
+      })
+      
+      .addCase(updatePluginSettingsOnServer.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updatePluginSettingsOnServer.fulfilled, (state) => {
         state.isLoading = false;
       })
-      .addCase(saveEnabledPluginsToStorage.rejected, (state, action) => {
+      .addCase(updatePluginSettingsOnServer.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.error.message || 'Failed to save enabled plugins';
+        state.error = action.payload as string || 'Failed to update plugin settings';
       });
   },
 });
 
 export const { 
-  enablePlugin, 
-  disablePlugin, 
-  addPlugin, 
-  clearPluginError 
+  enablePlugin,       // Local-only enable (backup)
+  disablePlugin,      // Local-only disable (backup)
+  addPlugin,          // Add new plugin to available list
+  clearPluginError    // Clear error messages
 } = pluginSlice.actions;
+
+export {
+  loadEnabledPluginsFromAPI,
+  enablePluginOnServer,
+  disablePluginOnServer,
+  updatePluginSettingsOnServer
+};
 
 export default pluginSlice.reducer;

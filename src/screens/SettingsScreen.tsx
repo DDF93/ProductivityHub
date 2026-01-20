@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Modal, FlatList, Dimensions } from 'react-native';
 
-// Get screen dimensions for modal sizing
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 import { TabNavigationProp } from '../types/NavigationTypes';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
-import { setTheme, saveThemeToStorage, clearThemeError } from '../store/slices/themeSlice';
+
+import { 
+  setTheme,                    // Still used for immediate UI update
+  saveCurrentThemeToAPI,       // NEW: Replaces saveThemeToStorage
+  clearThemeError 
+} from '../store/slices/themeSlice';
+
 import { getEnabledThemes } from '../utils/themeUtils';
 
 const styles = StyleSheet.create({
@@ -78,7 +83,6 @@ const styles = StyleSheet.create({
     loadingIndicator: {
         marginRight: 8,
     },
-    // NEW: Dropdown styles
     dropdownButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -105,9 +109,9 @@ const styles = StyleSheet.create({
     modalContent: {
         borderRadius: 12,
         padding: 20,
-        width: screenWidth * 0.8,        // 80% of screen width (wider)
-        height: screenHeight * 0.67,     // 67% of screen height (2/3)
-        maxHeight: 500,                  // Cap the height on large screens
+        width: screenWidth * 0.8,
+        height: screenHeight * 0.67,
+        maxHeight: 500,
     },
     modalTitle: {
         fontSize: 18,
@@ -116,8 +120,8 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     modalScrollContainer: {
-        flex: 1,                         // Takes remaining space after title
-        marginTop: 8,                    // Small gap between title and list
+        flex: 1,
+        marginTop: 8,
     },
     themeOption: {
         paddingVertical: 12,
@@ -139,6 +143,7 @@ type SettingsScreenProps = {
 };
 
 function SettingsScreen({ navigation }: SettingsScreenProps) {
+    
     const theme = useAppSelector(state => state.theme.currentTheme);
     const currentThemeId = useAppSelector(state => state.theme.currentThemeId);
     const availableThemes = useAppSelector(state => state.theme.availableThemes);
@@ -147,24 +152,28 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
     const error = useAppSelector(state => state.theme.error);
     const dispatch = useAppDispatch();
 
-    // NEW: Dropdown state
     const [dropdownVisible, setDropdownVisible] = useState(false);
 
-    // Get enabled theme objects (convert IDs to full theme objects)
     const enabledThemeObjects = getEnabledThemes(availableThemes, enabledThemes);
     const currentTheme = enabledThemeObjects.find(t => t.id === currentThemeId);
 
+    
     const handleThemeSelect = async (themeId: string) => {
-        // Close dropdown first
         setDropdownVisible(false);
         
-        // Only proceed if theme is different
         if (themeId !== currentThemeId) {
-            // First update the theme in Redux (immediate UI update)
             dispatch(setTheme(themeId));
+            try {
+                await dispatch(saveCurrentThemeToAPI(themeId)).unwrap();
+                
+                
+                console.log(`✅ Theme ${themeId} saved to server successfully`);
+                
+            } catch (error) {
+                console.error('❌ Failed to sync theme to server:', error);
+                
+            }
             
-            // Then save to storage (persistence for next app launch)
-            dispatch(saveThemeToStorage(themeId));
         }
     };
 
@@ -172,6 +181,7 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
         dispatch(clearThemeError());
     };
 
+    
     return (
         <View style={[styles.settingsContainer, {backgroundColor: theme.colors.background}]}>
             <View style={styles.headerSection}>
@@ -216,7 +226,7 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
                     </View>
 
                     <View style={styles.settingControlContainer}>
-                        {/* Loading indicator */}
+                        {/* Loading indicator shows when saving to API */}
                         {isLoading && (
                             <ActivityIndicator 
                                 size="small" 
