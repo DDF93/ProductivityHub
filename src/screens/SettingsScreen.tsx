@@ -1,3 +1,5 @@
+// src/screens/SettingsScreen.tsx
+
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Modal, FlatList, Dimensions } from 'react-native';
 
@@ -6,8 +8,8 @@ import { TabNavigationProp } from '../types/NavigationTypes';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 
 import { 
-  setTheme,                    // Still used for immediate UI update
-  saveCurrentThemeToAPI,       // NEW: Replaces saveThemeToStorage
+  setTheme,
+  saveCurrentThemeToAPI,
   clearThemeError 
 } from '../store/slices/themeSlice';
 
@@ -157,23 +159,25 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
     const enabledThemeObjects = getEnabledThemes(availableThemes, enabledThemes);
     const currentTheme = enabledThemeObjects.find(t => t.id === currentThemeId);
 
-    
+    // ✅ UPDATED: Better logging for offline testing
     const handleThemeSelect = async (themeId: string) => {
         setDropdownVisible(false);
         
         if (themeId !== currentThemeId) {
+            console.log(`🎨 User selected theme: ${themeId}`);
+            
+            // Optimistic update - UI changes immediately
             dispatch(setTheme(themeId));
+            
             try {
+                // Attempt to sync with server
                 await dispatch(saveCurrentThemeToAPI(themeId)).unwrap();
-                
-                
-                console.log(`✅ Theme ${themeId} saved to server successfully`);
+                console.log(`✅ Theme synced with server`);
                 
             } catch (error) {
-                console.error('❌ Failed to sync theme to server:', error);
-                
+                console.log('⚠️ Server sync failed, but theme changed locally');
+                // UI already updated, so this is graceful degradation
             }
-            
         }
     };
 
@@ -181,7 +185,6 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
         dispatch(clearThemeError());
     };
 
-    
     return (
         <View style={[styles.settingsContainer, {backgroundColor: theme.colors.background}]}>
             <View style={styles.headerSection}>
@@ -192,7 +195,6 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
                     Customize your app experience
                 </Text>
                 
-                {/* Error message display */}
                 {error && (
                     <View style={styles.errorContainer}>
                         <Text style={[styles.errorText, {color: 'red'}]}>
@@ -226,7 +228,6 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
                     </View>
 
                     <View style={styles.settingControlContainer}>
-                        {/* Loading indicator shows when saving to API */}
                         {isLoading && (
                             <ActivityIndicator 
                                 size="small" 
@@ -235,7 +236,6 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
                             />
                         )}
                         
-                        {/* Theme dropdown button */}
                         <TouchableOpacity
                             style={[
                                 styles.dropdownButton,
@@ -258,7 +258,6 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
                 </View>
             </View>
 
-            {/* Theme selection modal */}
             <Modal
                 visible={dropdownVisible}
                 transparent={true}

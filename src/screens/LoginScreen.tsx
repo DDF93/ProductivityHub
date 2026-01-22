@@ -1,3 +1,4 @@
+// src/screens/LoginScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -10,11 +11,19 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { AuthStackParamList } from '../navigation/AuthNavigator';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { login, clearError } from '../store/slices/authSlice';
 
+// Define navigation prop type for this screen
+type LoginScreenNavigationProp = StackNavigationProp<AuthStackParamList, 'Login'>;
 
-function LoginScreen() {
+type LoginScreenProps = {
+  navigation: LoginScreenNavigationProp;
+};
+
+function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
@@ -131,6 +140,21 @@ function LoginScreen() {
             <Text style={styles.loginButtonText}>Login</Text>
           )}
         </TouchableOpacity>
+        
+        {/* Register link */}
+        <View style={styles.registerContainer}>
+          <Text style={[styles.registerText, { color: theme.colors.textSecondary }]}>
+            Don't have an account?
+          </Text>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Register')}
+            disabled={isLoading}
+          >
+            <Text style={[styles.registerLink, { color: theme.colors.accent }]}>
+              {' '}Sign up
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -196,6 +220,18 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
+    fontWeight: '600',
+  },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  registerText: {
+    fontSize: 16,
+  },
+  registerLink: {
+    fontSize: 16,
     fontWeight: '600',
   },
 });

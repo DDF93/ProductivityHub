@@ -3,10 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "android": "react-native run-android",
-    "ios": "react-native run-ios",
-    "lint": "eslint .",
     "start": "react-native start",
+    "phone": "react-native run-android --device=R3CT40MP6LH",
+    "emulator": "start emulator -avd Medium_Phone_API_36.0 && timeout /t 35 && react-native run-android --device=emulator-5554",
+    "lint": "eslint .",
     "test": "jest"
   },
   "dependencies": {

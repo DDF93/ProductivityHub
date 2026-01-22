@@ -1,3 +1,4 @@
+// src/store/slices/authSlice.ts
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { 
   authService, 
@@ -5,6 +6,10 @@ import {
   LoginRequest, 
   User 
 } from '../../services/api/authService';
+
+// ✅ ADD: Import preference loading actions
+import { loadUserPreferences } from './themeSlice';
+import { loadEnabledPluginsFromAPI } from './pluginSlice';
 
 interface AuthState {
   user: User | null;
@@ -53,11 +58,20 @@ export const register = createAsyncThunk(
   }
 );
 
+// ✅ MODIFIED: Login now loads preferences after success
 export const login = createAsyncThunk(
   'auth/login',
-  async (credentials: LoginRequest, { rejectWithValue }) => {
+  async (credentials: LoginRequest, { rejectWithValue, dispatch }) => {
     try {
       const response = await authService.login(credentials);
+      
+      // ✅ After successful login, immediately load user preferences
+      console.log('✅ Login successful - loading preferences from server...');
+      
+      // Load preferences and plugins from server
+      dispatch(loadUserPreferences());
+      dispatch(loadEnabledPluginsFromAPI());
+      
       return response.user;
     } catch (error: any) {
       const message = error.response?.data?.error || 'Login failed';
@@ -68,9 +82,15 @@ export const login = createAsyncThunk(
 
 export const verifyEmail = createAsyncThunk(
   'auth/verifyEmail',
-  async (token: string, { rejectWithValue }) => {
+  async (token: string, { rejectWithValue, dispatch }) => {
     try {
       const response = await authService.verifyEmail(token);
+      
+      // ✅ After email verification, load preferences
+      console.log('✅ Email verified - loading preferences from server...');
+      dispatch(loadUserPreferences());
+      dispatch(loadEnabledPluginsFromAPI());
+      
       return response.user;
     } catch (error: any) {
       const message = error.response?.data?.error || 'Email verification failed';

@@ -5,18 +5,16 @@ import dotenv from 'dotenv';
 
 // Import route handlers
 import authRoutes from './routes/auth';
-import userPreferencesRoutes from './routes/userPreferences';
+import userPreferencesRoutes from './routes/userPreferences';  // ✅ Already imported
 
 // Import middleware
 import { authenticateToken } from './middleware/auth';
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = '0.0.0.0';
-
 
 // Middleware
 app.use(cors());
@@ -40,68 +38,13 @@ app.get('/health', (req, res) => {
 // Authentication routes (public)
 app.use('/api/auth', authRoutes);
 
-// Protected routes - require authentication
-app.get('/api/user/profile', authenticateToken, (req, res) => {
-  // req.user is available here because of authenticateToken middleware
-  res.json({
-    message: 'Profile retrieved successfully',
-    user: req.user
-  });
-});
+// ✅ REMOVE these placeholder routes - they're already in userPreferencesRoutes
+// app.get('/api/user/profile', authenticateToken, ...);
+// app.get('/api/user/enabled-plugins', authenticateToken, ...);
+// app.get('/api/user/enabled-themes', authenticateToken, ...);
+// app.get('/api/user/current-theme', authenticateToken, ...);
 
-app.get('/api/user/enabled-plugins', authenticateToken, (req, res) => {
-  // TODO: Get user's actual enabled plugins from database
-  res.json({
-    userId: req.user!.id,
-    enabledPlugins: ['workout-tracker', 'nutrition-logger']
-  });
-});
-
-app.get('/api/user/enabled-themes', authenticateToken, (req, res) => {
-  // TODO: Get user's actual enabled themes from database
-  res.json({
-    userId: req.user!.id,
-    enabledThemes: ['light-default', 'dark-default']
-  });
-});
-
-app.get('/api/user/current-theme', authenticateToken, (req, res) => {
-  // TODO: Get user's actual current theme from database
-  res.json({
-    userId: req.user!.id,
-    currentTheme: 'light-default'
-  });
-});
-
-// Example: Update user profile (protected POST route)
-app.put('/api/user/profile', authenticateToken, async (req, res) => {
-  try {
-    const { name } = req.body;
-    
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({
-        error: 'Name is required'
-      });
-    }
-
-    // TODO: Update user in database
-    // For now, return success with updated user data
-    res.json({
-      message: 'Profile updated successfully',
-      user: {
-        ...req.user!,
-        name: name.trim()
-      }
-    });
-
-  } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(500).json({
-      error: 'Internal server error'
-    });
-  }
-});
-
+// ✅ USE the actual userPreferences routes instead
 app.use('/api/user', userPreferencesRoutes);
 
 // 404 handler
@@ -121,22 +64,20 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   });
 });
 
-// Start server
-
-
-app.listen(PORT, HOST, () => {  // ADD HOST parameter
+app.listen(PORT, HOST, () => {
   console.log(`🚀 ProductivityHub API running on port ${PORT}`);
   console.log(`📍 Local: http://localhost:${PORT}`);
-  console.log(`📱 Network: http://YOUR_COMPUTER_IP:${PORT}`);  // Replace with your IP
+  console.log(`📱 Network: http://192.168.1.109:${PORT}`);
   console.log(`🔍 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Authentication endpoints:`);
   console.log(`   POST http://localhost:${PORT}/api/auth/register`);
   console.log(`   GET  http://localhost:${PORT}/api/auth/verify-email?token=...`);
   console.log(`   POST http://localhost:${PORT}/api/auth/login`);
   console.log(`🛡️  Protected endpoints (require Bearer token):`);
-  console.log(`   GET  http://localhost:${PORT}/api/user/profile`);
-  console.log(`   PUT  http://localhost:${PORT}/api/user/profile`);
   console.log(`   GET  http://localhost:${PORT}/api/user/preferences`);
+  console.log(`   PUT  http://localhost:${PORT}/api/user/current-theme`);
+  console.log(`   POST http://localhost:${PORT}/api/user/enabled-themes`);
+  console.log(`   DELETE http://localhost:${PORT}/api/user/enabled-themes/:themeId`);
 });
 
 export default app;
