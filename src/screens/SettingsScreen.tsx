@@ -1,7 +1,7 @@
 // src/screens/SettingsScreen.tsx
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Modal, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Modal, FlatList, Dimensions, Alert } from 'react-native';  // ✅ Add Alert
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 import { TabNavigationProp } from '../types/NavigationTypes';
@@ -12,6 +12,8 @@ import {
   saveCurrentThemeToAPI,
   clearThemeError 
 } from '../store/slices/themeSlice';
+
+import { logout } from '../store/slices/authSlice';
 
 import { getEnabledThemes } from '../utils/themeUtils';
 
@@ -138,6 +140,25 @@ const styles = StyleSheet.create({
     selectedThemeOption: {
         opacity: 0.7,
     },
+    // ✅ NEW: Red logout button styles
+    logoutButton: {
+        backgroundColor: 'rgba(255, 59, 48, 0.1)', // Light red background
+        borderColor: '#FF3B30', // Red border
+        borderWidth: 2, // Thicker border
+    },
+    logoutLabel: {
+        color: '#FF3B30', // Red text
+        fontWeight: '600', // Slightly bolder
+    },
+    logoutDescription: {
+        color: '#FF3B30', // Red text for description too
+        opacity: 0.7,
+    },
+    logoutIcon: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#FF3B30', // Red icon
+    },
 });
 
 type SettingsScreenProps = {
@@ -159,7 +180,6 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
     const enabledThemeObjects = getEnabledThemes(availableThemes, enabledThemes);
     const currentTheme = enabledThemeObjects.find(t => t.id === currentThemeId);
 
-    // ✅ UPDATED: Better logging for offline testing
     const handleThemeSelect = async (themeId: string) => {
         setDropdownVisible(false);
         
@@ -183,6 +203,35 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
 
     const handleErrorDismiss = () => {
         dispatch(clearThemeError());
+    };
+
+    // ✅ UPDATED: Show confirmation dialog before logging out
+    const handleLogout = () => {
+        Alert.alert(
+            'Logout',
+            'Are you sure you want to log out?',
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                    onPress: () => console.log('Logout cancelled')
+                },
+                {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                        console.log('🚪 Logging out...');
+                        try {
+                            await dispatch(logout()).unwrap();
+                            console.log('✅ Logout successful');
+                        } catch (error) {
+                            console.error('❌ Logout failed:', error);
+                        }
+                    }
+                }
+            ],
+            { cancelable: true }
+        );
     };
 
     return (
@@ -210,6 +259,7 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
                 )}
             </View>
 
+            {/* Theme Settings Section */}
             <View style={styles.settingsSection}>
                 <View style={[
                     styles.settingItem, 
@@ -258,6 +308,30 @@ function SettingsScreen({ navigation }: SettingsScreenProps) {
                 </View>
             </View>
 
+            {/* ✅ UPDATED: Red Logout Section with Confirmation */}
+            <View style={styles.settingsSection}>
+                <TouchableOpacity
+                    style={[
+                        styles.settingItem,
+                        styles.logoutButton, // Red styling
+                    ]}
+                    onPress={handleLogout}
+                >
+                    <View style={styles.settingLabelContainer}>
+                        <Text style={[styles.settingLabel, styles.logoutLabel]}>
+                            Logout
+                        </Text>
+                        <Text style={[styles.settingDescription, styles.logoutDescription]}>
+                            Sign out of your account
+                        </Text>
+                    </View>
+                    <Text style={styles.logoutIcon}>
+                        →
+                    </Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Theme Selection Modal */}
             <Modal
                 visible={dropdownVisible}
                 transparent={true}
