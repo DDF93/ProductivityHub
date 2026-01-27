@@ -1,19 +1,17 @@
 import { Platform } from 'react-native';
 
 const getBaseURL = (): string => {
-  if (__DEV__) {
-    if (Platform.OS === 'android') {
-      // TODO: Replace with your computer's IP address
-      // Find it: Windows (ipconfig), Mac/Linux (ifconfig)
-      return 'http://192.168.1.109:3000';  // REPLACE XXX with your IP
-      
-      // For Android emulator (not physical device):
-      // return 'http://10.0.2.2:3000';
-    }
-    return 'http://localhost:3000';
-  }
+  // TEMPORARY: Force production URL for testing
+  return 'https://api.productivityhub.app';
   
-  return 'https://productivity-hub-production.up.railway.app';
+  // Later, you can uncomment this logic for local development:
+  // if (__DEV__) {
+  //   if (Platform.OS === 'android') {
+  //     return 'http://192.168.1.109:3000';
+  //   }
+  //   return 'http://localhost:3000';
+  // }
+  // return 'https://api.productivityhub.app';
 };
 
 export const API_BASE_URL = getBaseURL();
