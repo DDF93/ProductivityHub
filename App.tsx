@@ -26,7 +26,8 @@ function AppContent() {
   
   const { isAuthenticated, isInitialized } = useAppSelector(state => state.auth);
   const theme = useAppSelector(state => state.theme.currentTheme);
-  
+
+
   // ✅ Two-stage initialization
   useEffect(() => {
     const initializeApp = async () => {
