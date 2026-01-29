@@ -202,7 +202,7 @@ router.post('/enabled-themes',
 // DELETE disable a theme
 router.delete('/enabled-themes/:themeId', async (req: Request, res: Response) => {
   try {
-    const { themeId } = req.params;
+    const themeId = req.params.themeId as string;
     const userId = req.user!.id;
 
     if (!themeId) {
