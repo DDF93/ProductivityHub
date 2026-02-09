@@ -1,3 +1,4 @@
+import '../config/test';
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
 
@@ -5,6 +6,7 @@ dotenv.config();
 
 const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
 const isProduction = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test';
 
 const developmentConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -21,10 +23,15 @@ const productionConfig = {
   }
 };
 
-const dbConfig = isDevelopment ? developmentConfig : productionConfig;
+const testConfig = {
+  connectionString: process.env.DATABASE_URL,
+  ssl: false  // Docker doesn't support SSL
+};
+
+const dbConfig = isTest ? testConfig : (isDevelopment ? developmentConfig : productionConfig);
 
 console.log(`🔌 Database mode: ${process.env.NODE_ENV || 'development'}`);
-console.log(`📍 Connecting to: ${isDevelopment ? 'Local Docker PostgreSQL' : 'Railway PostgreSQL'}`);
+console.log(`📍 Connecting to: ${isDevelopment ? 'Local Docker PostgreSQL' : isTest ? 'Local Docker Test Database' : 'Railway PostgreSQL'}`);
 
 export const pool = new Pool(dbConfig);
 
@@ -44,7 +51,7 @@ export async function testConnection(): Promise<void> {
     console.log('✅ Database connected successfully');
     console.log(`📅 Server time: ${row.current_time}`);
     console.log(`🗃️  Database name: ${row.db_name}`);
-    console.log(`🐘 PostgreSQL version: ${row.postgres_version.split(',')[0]}`);  // First part only
+    console.log(`🐘 PostgreSQL version: ${row.postgres_version.split(',')[0]}`);
     
     client.release();
     
