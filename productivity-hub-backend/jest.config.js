@@ -2,29 +2,43 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   
-  // Only files with .test.ts or .spec.ts are tests
   testMatch: [
     '**/__tests__/**/*.test.ts',
     '**/__tests__/**/*.spec.ts',
     '**/?(*.)+(spec|test).ts'
   ],
   
-  // Explicitly ignore these patterns
   testPathIgnorePatterns: [
     '/node_modules/',
-    '/__tests__/helpers/',  // Ignore helper files
-    '/config/',              // Ignore config files
+    '/__tests__/helpers/',
+    '/config/',
+  ],
+  
+  // Use wildcards to match anywhere in path
+  coveragePathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    'server.ts',                    // ← Remove leading slash, matches anywhere
+    'test-email.ts',                // ← Matches any test-email.ts
+    'test-connection.ts',           // ← Matches any test-connection.ts
+    'connection.ts',                // ← Matches any connection.ts (if you want to exclude it)
+    'migrate.ts',
+    'migrateTest.ts',
+    'verify-schema.ts',
+    '/config/',
+    '/__tests__/',
   ],
   
   collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.test.ts',
-    '!src/**/*.spec.ts',
-    '!src/migrate.ts',
-    '!src/migrateTest.ts',
-    '!src/verify-schema.ts',
-    '!src/config/**',         // Don't include config in coverage
-    '!src/__tests__/**',      // Don't include test helpers in coverage
+    'src/**/*.ts',                  // Include all .ts files in src
+    '!src/**/*.test.ts',            // Exclude test files
+    '!src/**/*.spec.ts',            // Exclude spec files
+    '!src/**/test-*.ts',            // ← Exclude any file starting with "test-"
+    '!src/**/migrate*.ts',          // ← Exclude migration files
+    '!src/**/verify-*.ts',          // ← Exclude verification scripts
+    '!src/server.ts',               // Exclude server startup
+    '!src/config/**',               // Exclude config directory
+    '!src/__tests__/**',            // Exclude test helpers
   ],
   
   coverageThreshold: {

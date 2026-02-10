@@ -111,7 +111,7 @@ router.post('/register',
       await emailService.sendVerificationEmail(email, name, verificationToken);
 
       res.status(201).json({
-        message: 'Registration successful. Please check your email to verify your account.',
+        message: 'Registration successful. A verification email has been sent to your email address.',
         user: {
           id: user.id,
           email: user.email,
