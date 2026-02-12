@@ -97,15 +97,11 @@ router.post('/register',
 
       const user = newUser.rows[0];
 
-      // Create default preferences
+      // ✅ FIXED: Create user_preferences record with normalized schema
       await pool.query(`
-        INSERT INTO user_preferences (user_id, current_theme, enabled_themes, updated_at)
-        VALUES ($1, $2, $3, NOW())
-      `, [
-        user.id, 
-        'light-default',
-        JSON.stringify(['light-default', 'dark-default'])
-      ]);
+        INSERT INTO user_preferences (user_id, created_at, updated_at)
+        VALUES ($1, NOW(), NOW())
+      `, [user.id]);
 
       // Send verification email
       await emailService.sendVerificationEmail(email, name, verificationToken);

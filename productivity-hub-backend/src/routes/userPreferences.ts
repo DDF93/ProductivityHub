@@ -6,21 +6,20 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
-// Apply authentication to all routes in this file
+// Apply authentication to all routes
 router.use(authenticateToken);
 
 // ============================================================================
-// THEME MANAGEMENT ENDPOINTS
+// GET /api/user/preferences
+// Fetch user preferences with enabled themes and plugins
 // ============================================================================
-
-// GET current user preferences (themes and plugins)
 router.get('/preferences', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
 
-    // Get user preferences from database
+    // Get user preferences record
     const preferencesResult = await pool.query(`
-      SELECT current_theme, enabled_themes, updated_at
+      SELECT id, user_id, current_theme_id, created_at, updated_at
       FROM user_preferences 
       WHERE user_id = $1
     `, [userId]);
@@ -31,29 +30,28 @@ router.get('/preferences', async (req: Request, res: Response) => {
       });
     }
 
-    const preferences = preferencesResult.rows[0];
+    // Get enabled themes with full theme details
+    const enabledThemesResult = await pool.query(`
+      SELECT t.id, t.name, t.description, t.color_scheme, t.is_default, uet.enabled_at
+      FROM user_enabled_themes uet
+      JOIN themes t ON uet.theme_id = t.id
+      WHERE uet.user_id = $1
+      ORDER BY uet.enabled_at
+    `, [userId]);
 
-    // Get enabled plugins
-    const pluginsResult = await pool.query(`
-      SELECT plugin_id, enabled_at, settings
-      FROM user_enabled_plugins 
-      WHERE user_id = $1
-      ORDER BY enabled_at
+    // Get enabled plugins with full plugin details
+    const enabledPluginsResult = await pool.query(`
+      SELECT p.id, p.name, p.description, p.is_default, uep.enabled_at
+      FROM user_enabled_plugins uep
+      JOIN plugins p ON uep.plugin_id = p.id
+      WHERE uep.user_id = $1
+      ORDER BY uep.enabled_at
     `, [userId]);
 
     res.json({
-      themes: {
-        current: preferences.current_theme,
-        enabled: preferences.enabled_themes
-      },
-      plugins: {
-        enabled: pluginsResult.rows.map(row => ({
-          id: row.plugin_id,
-          enabledAt: row.enabled_at,
-          settings: row.settings
-        }))
-      },
-      lastUpdated: preferences.updated_at
+      preferences: preferencesResult.rows[0],
+      enabledThemes: enabledThemesResult.rows,
+      enabledPlugins: enabledPluginsResult.rows
     });
 
   } catch (error) {
@@ -64,61 +62,60 @@ router.get('/preferences', async (req: Request, res: Response) => {
   }
 });
 
-// PUT update current theme
-router.put('/current-theme', 
+// ============================================================================
+// PUT /api/user/current-theme
+// Update the current active theme
+// ============================================================================
+router.put('/current-theme',
   [
     body('themeId')
-      .isString()
-      .trim()
-      .isLength({ min: 1 })
+      .notEmpty()
       .withMessage('Theme ID is required')
+      .isString()
+      .withMessage('Theme ID must be a string')
   ],
   async (req: Request, res: Response) => {
     try {
+      // Validate request
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({
-          error: 'Validation failed',
-          details: errors.array()
+          error: errors.array()[0].msg
         });
       }
 
       const { themeId } = req.body;
       const userId = req.user!.id;
 
-      // Check if theme is in user's enabled themes
-      const preferencesResult = await pool.query(`
-        SELECT enabled_themes 
-        FROM user_preferences 
-        WHERE user_id = $1
-      `, [userId]);
+      // Check if theme exists
+      const themeExists = await pool.query(
+        'SELECT id FROM themes WHERE id = $1',
+        [themeId]
+      );
 
-      if (preferencesResult.rows.length === 0) {
+      if (themeExists.rows.length === 0) {
+        return res.status(404).json({
+          error: 'Theme not found'
+        });
+      }
+
+      // Update current theme in user preferences
+      const updateResult = await pool.query(`
+        UPDATE user_preferences 
+        SET current_theme_id = $1, updated_at = NOW()
+        WHERE user_id = $2
+        RETURNING id, user_id, current_theme_id, created_at, updated_at
+      `, [themeId, userId]);
+
+      if (updateResult.rows.length === 0) {
         return res.status(404).json({
           error: 'User preferences not found'
         });
       }
 
-      const enabledThemes = preferencesResult.rows[0].enabled_themes;
-      
-      if (!enabledThemes.includes(themeId)) {
-        return res.status(400).json({
-          error: 'Cannot set theme that is not enabled. Enable the theme first.'
-        });
-      }
-
-      // Update current theme
-      const updateResult = await pool.query(`
-        UPDATE user_preferences 
-        SET current_theme = $1, updated_at = NOW()
-        WHERE user_id = $2
-        RETURNING current_theme, updated_at
-      `, [themeId, userId]);
-
       res.json({
         message: 'Current theme updated successfully',
-        currentTheme: updateResult.rows[0].current_theme,
-        updatedAt: updateResult.rows[0].updated_at
+        preferences: updateResult.rows[0]
       });
 
     } catch (error) {
@@ -130,64 +127,65 @@ router.put('/current-theme',
   }
 );
 
-// POST enable a theme
+// ============================================================================
+// POST /api/user/enabled-themes
+// Enable a theme for the user (add to enabled list)
+// ============================================================================
 router.post('/enabled-themes',
   [
     body('themeId')
-      .isString()
-      .trim()
-      .isLength({ min: 1 })
+      .notEmpty()
       .withMessage('Theme ID is required')
+      .isString()
+      .withMessage('Theme ID must be a string')
   ],
   async (req: Request, res: Response) => {
     try {
+      // Validate request
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({
-          error: 'Validation failed',
-          details: errors.array()
+          error: errors.array()[0].msg
         });
       }
 
       const { themeId } = req.body;
       const userId = req.user!.id;
 
-      // Get current enabled themes
-      const preferencesResult = await pool.query(`
-        SELECT enabled_themes 
-        FROM user_preferences 
-        WHERE user_id = $1
-      `, [userId]);
+      // Check if theme exists
+      const themeExists = await pool.query(
+        'SELECT id FROM themes WHERE id = $1',
+        [themeId]
+      );
 
-      if (preferencesResult.rows.length === 0) {
+      if (themeExists.rows.length === 0) {
         return res.status(404).json({
-          error: 'User preferences not found'
+          error: 'Theme not found'
         });
       }
 
-      const currentEnabledThemes = preferencesResult.rows[0].enabled_themes;
+      // Check if already enabled
+      const alreadyEnabled = await pool.query(
+        'SELECT * FROM user_enabled_themes WHERE user_id = $1 AND theme_id = $2',
+        [userId, themeId]
+      );
 
-      // Check if theme is already enabled
-      if (currentEnabledThemes.includes(themeId)) {
-        return res.status(400).json({
-          error: 'Theme is already enabled'
+      if (alreadyEnabled.rows.length > 0) {
+        return res.status(409).json({
+          error: 'Theme already enabled'
         });
       }
 
-      // Add theme to enabled list
-      const updatedEnabledThemes = [...currentEnabledThemes, themeId];
+      // Enable theme (insert into join table)
+      const insertResult = await pool.query(`
+        INSERT INTO user_enabled_themes (user_id, theme_id, enabled_at)
+        VALUES ($1, $2, NOW())
+        RETURNING user_id, theme_id, enabled_at
+      `, [userId, themeId]);
 
-      const updateResult = await pool.query(`
-        UPDATE user_preferences 
-        SET enabled_themes = $1, updated_at = NOW()
-        WHERE user_id = $2
-        RETURNING enabled_themes, updated_at
-      `, [JSON.stringify(updatedEnabledThemes), userId]);
-
-      res.json({
+      res.status(201).json({
         message: 'Theme enabled successfully',
-        enabledThemes: updateResult.rows[0].enabled_themes,
-        updatedAt: updateResult.rows[0].updated_at
+        enabledTheme: insertResult.rows[0]
       });
 
     } catch (error) {
@@ -199,10 +197,13 @@ router.post('/enabled-themes',
   }
 );
 
-// DELETE disable a theme
+// ============================================================================
+// DELETE /api/user/enabled-themes/:themeId
+// Disable a theme (remove from enabled list)
+// ============================================================================
 router.delete('/enabled-themes/:themeId', async (req: Request, res: Response) => {
   try {
-    const themeId = req.params.themeId as string;
+    const { themeId } = req.params;
     const userId = req.user!.id;
 
     if (!themeId) {
@@ -211,57 +212,26 @@ router.delete('/enabled-themes/:themeId', async (req: Request, res: Response) =>
       });
     }
 
-    // Check if theme can be disabled (core themes cannot be disabled)
-    const coreThemes = ['light-default', 'dark-default'];
-    if (coreThemes.includes(themeId)) {
-      return res.status(400).json({
-        error: 'Core themes cannot be disabled'
-      });
-    }
-
-    // Get current preferences
-    const preferencesResult = await pool.query(`
-      SELECT current_theme, enabled_themes 
-      FROM user_preferences 
-      WHERE user_id = $1
-    `, [userId]);
-
-    if (preferencesResult.rows.length === 0) {
-      return res.status(404).json({
-        error: 'User preferences not found'
-      });
-    }
-
-    const { current_theme, enabled_themes } = preferencesResult.rows[0];
-
     // Check if theme is enabled
-    if (!enabled_themes.includes(themeId)) {
-      return res.status(400).json({
-        error: 'Theme is not enabled'
+    const isEnabled = await pool.query(
+      'SELECT * FROM user_enabled_themes WHERE user_id = $1 AND theme_id = $2',
+      [userId, themeId]
+    );
+
+    if (isEnabled.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Theme not enabled'
       });
     }
 
-    // Remove theme from enabled list
-    const updatedEnabledThemes = enabled_themes.filter((id: string) => id !== themeId);
-
-    // If current theme is being disabled, switch to first enabled theme
-    let newCurrentTheme = current_theme;
-    if (current_theme === themeId) {
-      newCurrentTheme = updatedEnabledThemes[0]; // Should always have at least core themes
-    }
-
-    const updateResult = await pool.query(`
-      UPDATE user_preferences 
-      SET current_theme = $1, enabled_themes = $2, updated_at = NOW()
-      WHERE user_id = $3
-      RETURNING current_theme, enabled_themes, updated_at
-    `, [newCurrentTheme, JSON.stringify(updatedEnabledThemes), userId]);
+    // Disable theme (delete from join table)
+    await pool.query(
+      'DELETE FROM user_enabled_themes WHERE user_id = $1 AND theme_id = $2',
+      [userId, themeId]
+    );
 
     res.json({
-      message: 'Theme disabled successfully',
-      currentTheme: updateResult.rows[0].current_theme,
-      enabledThemes: updateResult.rows[0].enabled_themes,
-      updatedAt: updateResult.rows[0].updated_at
+      message: 'Theme disabled successfully'
     });
 
   } catch (error) {
@@ -273,62 +243,64 @@ router.delete('/enabled-themes/:themeId', async (req: Request, res: Response) =>
 });
 
 // ============================================================================
-// PLUGIN MANAGEMENT ENDPOINTS
+// POST /api/user/enabled-plugins
+// Enable a plugin for the user
 // ============================================================================
-
-// POST enable a plugin
 router.post('/enabled-plugins',
   [
     body('pluginId')
+      .notEmpty()
+      .withMessage('Plugin ID is required')
       .isString()
-      .trim()
-      .isLength({ min: 1 })
-      .withMessage('Plugin ID is required'),
-    body('settings')
-      .optional()
-      .isObject()
-      .withMessage('Settings must be an object')
+      .withMessage('Plugin ID must be a string')
   ],
   async (req: Request, res: Response) => {
     try {
+      // Validate request
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({
-          error: 'Validation failed',
-          details: errors.array()
+          error: errors.array()[0].msg
         });
       }
 
-      const { pluginId, settings = {} } = req.body;
+      const { pluginId } = req.body;
       const userId = req.user!.id;
 
-      // Check if plugin is already enabled
-      const existingPlugin = await pool.query(`
-        SELECT plugin_id 
-        FROM user_enabled_plugins 
-        WHERE user_id = $1 AND plugin_id = $2
-      `, [userId, pluginId]);
+      // Check if plugin exists
+      const pluginExists = await pool.query(
+        'SELECT id FROM plugins WHERE id = $1',
+        [pluginId]
+      );
 
-      if (existingPlugin.rows.length > 0) {
-        return res.status(400).json({
-          error: 'Plugin is already enabled'
+      if (pluginExists.rows.length === 0) {
+        return res.status(404).json({
+          error: 'Plugin not found'
         });
       }
 
-      // Enable plugin
-      const insertResult = await pool.query(`
-        INSERT INTO user_enabled_plugins (user_id, plugin_id, settings, enabled_at)
-        VALUES ($1, $2, $3, NOW())
-        RETURNING plugin_id, settings, enabled_at
-      `, [userId, pluginId, JSON.stringify(settings)]);
+      // Check if already enabled
+      const alreadyEnabled = await pool.query(
+        'SELECT * FROM user_enabled_plugins WHERE user_id = $1 AND plugin_id = $2',
+        [userId, pluginId]
+      );
 
-      res.json({
+      if (alreadyEnabled.rows.length > 0) {
+        return res.status(409).json({
+          error: 'Plugin already enabled'
+        });
+      }
+
+      // Enable plugin (insert into join table)
+      const insertResult = await pool.query(`
+        INSERT INTO user_enabled_plugins (user_id, plugin_id, enabled_at)
+        VALUES ($1, $2, NOW())
+        RETURNING user_id, plugin_id, enabled_at
+      `, [userId, pluginId]);
+
+      res.status(201).json({
         message: 'Plugin enabled successfully',
-        plugin: {
-          id: insertResult.rows[0].plugin_id,
-          settings: insertResult.rows[0].settings,
-          enabledAt: insertResult.rows[0].enabled_at
-        }
+        enabledPlugin: insertResult.rows[0]
       });
 
     } catch (error) {
@@ -340,7 +312,10 @@ router.post('/enabled-plugins',
   }
 );
 
-// DELETE disable a plugin
+// ============================================================================
+// DELETE /api/user/enabled-plugins/:pluginId
+// Disable a plugin
+// ============================================================================
 router.delete('/enabled-plugins/:pluginId', async (req: Request, res: Response) => {
   try {
     const { pluginId } = req.params;
@@ -353,27 +328,25 @@ router.delete('/enabled-plugins/:pluginId', async (req: Request, res: Response) 
     }
 
     // Check if plugin is enabled
-    const existingPlugin = await pool.query(`
-      SELECT plugin_id 
-      FROM user_enabled_plugins 
-      WHERE user_id = $1 AND plugin_id = $2
-    `, [userId, pluginId]);
+    const isEnabled = await pool.query(
+      'SELECT * FROM user_enabled_plugins WHERE user_id = $1 AND plugin_id = $2',
+      [userId, pluginId]
+    );
 
-    if (existingPlugin.rows.length === 0) {
-      return res.status(400).json({
-        error: 'Plugin is not enabled'
+    if (isEnabled.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Plugin not enabled'
       });
     }
 
-    // Disable plugin
-    await pool.query(`
-      DELETE FROM user_enabled_plugins 
-      WHERE user_id = $1 AND plugin_id = $2
-    `, [userId, pluginId]);
+    // Disable plugin (delete from join table)
+    await pool.query(
+      'DELETE FROM user_enabled_plugins WHERE user_id = $1 AND plugin_id = $2',
+      [userId, pluginId]
+    );
 
     res.json({
-      message: 'Plugin disabled successfully',
-      pluginId: pluginId
+      message: 'Plugin disabled successfully'
     });
 
   } catch (error) {
@@ -383,58 +356,5 @@ router.delete('/enabled-plugins/:pluginId', async (req: Request, res: Response) 
     });
   }
 });
-
-// PUT update plugin settings
-router.put('/enabled-plugins/:pluginId/settings',
-  [
-    body('settings')
-      .isObject()
-      .withMessage('Settings must be an object')
-  ],
-  async (req: Request, res: Response) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          error: 'Validation failed',
-          details: errors.array()
-        });
-      }
-
-      const { pluginId } = req.params;
-      const { settings } = req.body;
-      const userId = req.user!.id;
-
-      // Update plugin settings
-      const updateResult = await pool.query(`
-        UPDATE user_enabled_plugins 
-        SET settings = $1
-        WHERE user_id = $2 AND plugin_id = $3
-        RETURNING plugin_id, settings, enabled_at
-      `, [JSON.stringify(settings), userId, pluginId]);
-
-      if (updateResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'Plugin not found or not enabled'
-        });
-      }
-
-      res.json({
-        message: 'Plugin settings updated successfully',
-        plugin: {
-          id: updateResult.rows[0].plugin_id,
-          settings: updateResult.rows[0].settings,
-          enabledAt: updateResult.rows[0].enabled_at
-        }
-      });
-
-    } catch (error) {
-      console.error('Update plugin settings error:', error);
-      res.status(500).json({
-        error: 'Internal server error'
-      });
-    }
-  }
-);
 
 export default router;
