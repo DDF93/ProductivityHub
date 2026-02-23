@@ -1,9 +1,21 @@
--- Enable UUID extension for generating UUIDs
+-- ============================================================================
+-- ProductivityHub Initial Database Schema
+-- ============================================================================
+-- Purpose: Core authentication, normalized themes/plugins, user preferences
+-- Created: January 2026
+-- Note: Plugin-specific tables added as plugins are built
+-- ============================================================================
+
+-- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table (core authentication)
+-- ============================================================================
+-- AUTHENTICATION
+-- ============================================================================
+
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(255) NOT NULL,
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   email_verified BOOLEAN DEFAULT FALSE,
@@ -13,92 +25,170 @@ CREATE TABLE users (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- User preferences (themes, settings) - SAFE CASCADE
-CREATE TABLE user_preferences (
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE PRIMARY KEY,
-  current_theme VARCHAR(50) DEFAULT 'light-default',
-  enabled_themes JSONB DEFAULT '["light-default", "dark-default"]',
+-- Performance indexes for auth queries
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_verification_token ON users(email_verification_token);
+CREATE INDEX idx_users_id_verified ON users(id, email_verified) WHERE email_verified = true;
+CREATE INDEX idx_users_unverified ON users(created_at) WHERE email_verified = false;
+
+-- ============================================================================
+-- THEME CATALOG (Normalized)
+-- ============================================================================
+
+CREATE TABLE themes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  color_scheme JSONB,
+  is_default BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE INDEX idx_themes_name ON themes(name);
+
+-- Seed default themes
+INSERT INTO themes (name, description, color_scheme, is_default) VALUES
+(
+  'light-default',
+  'Bright and clean interface',
+  '{
+    "background": "#FFFFFF",
+    "surface": "#F5F5F5",
+    "text": "#000000",
+    "textSecondary": "#666666",
+    "primary": "#007AFF",
+    "border": "#E0E0E0"
+  }'::jsonb,
+  true
+),
+(
+  'dark-default',
+  'Easy on the eyes',
+  '{
+    "background": "#000000",
+    "surface": "#1C1C1E",
+    "text": "#FFFFFF",
+    "textSecondary": "#8E8E93",
+    "primary": "#0A84FF",
+    "border": "#38383A"
+  }'::jsonb,
+  true
+),
+(
+  'colorblind-default',
+  'Optimized for color vision deficiency',
+  '{
+    "background": "#FFFFFF",
+    "surface": "#F0F0F0",
+    "text": "#000000",
+    "textSecondary": "#555555",
+    "primary": "#0077BB",
+    "border": "#CCCCCC"
+  }'::jsonb,
+  false
+),
+(
+  'high-contrast',
+  'Maximum readability',
+  '{
+    "background": "#FFFFFF",
+    "surface": "#EEEEEE",
+    "text": "#000000",
+    "textSecondary": "#333333",
+    "primary": "#0000FF",
+    "border": "#000000"
+  }'::jsonb,
+  false
+),
+(
+  'grayscale-default',
+  'Distraction-free focus',
+  '{
+    "background": "#FFFFFF",
+    "surface": "#F8F8F8",
+    "text": "#000000",
+    "textSecondary": "#707070",
+    "primary": "#404040",
+    "border": "#D0D0D0"
+  }'::jsonb,
+  false
+);
+
+-- ============================================================================
+-- PLUGIN CATALOG (Normalized)
+-- ============================================================================
+
+CREATE TABLE plugins (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  is_default BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_plugins_name ON plugins(name);
+
+-- Seed placeholder plugins (actual tables added when plugins are built)
+INSERT INTO plugins (name, description, is_default) VALUES
+(
+  'day-planner',
+  'Plan your day with time-blocked schedules',
+  true
+),
+(
+  'habit-tracker',
+  'Track daily habits and build streaks',
+  false
+),
+(
+  'focus-timer',
+  'Pomodoro-style focus sessions',
+  false
+);
+
+-- ============================================================================
+-- USER PREFERENCES
+-- ============================================================================
+
+CREATE TABLE user_preferences (
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE PRIMARY KEY,
+  current_theme_id UUID REFERENCES themes(id) ON DELETE SET NULL,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_preferences_user_id ON user_preferences(user_id);
+
+-- ============================================================================
+-- USER ENABLED THEMES (Many-to-Many)
+-- ============================================================================
+
+CREATE TABLE user_enabled_themes (
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  theme_id UUID REFERENCES themes(id) ON DELETE CASCADE,
+  enabled_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (user_id, theme_id)
+);
+
+CREATE INDEX idx_user_enabled_themes_user_id ON user_enabled_themes(user_id);
+CREATE INDEX idx_user_enabled_themes_theme_id ON user_enabled_themes(theme_id);
+
+-- ============================================================================
+-- USER ENABLED PLUGINS (Many-to-Many)
+-- ============================================================================
+
 CREATE TABLE user_enabled_plugins (
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  plugin_id VARCHAR(100) NOT NULL,
+  plugin_id UUID REFERENCES plugins(id) ON DELETE CASCADE,
   enabled_at TIMESTAMP DEFAULT NOW(),
   settings JSONB DEFAULT '{}',
   PRIMARY KEY (user_id, plugin_id)
 );
 
--- Planner items (reusable building blocks) - PRESERVE DATA
-CREATE TABLE planner_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  default_duration INTEGER, -- minutes (NULL = no default duration)
-  category VARCHAR(100),
-  color VARCHAR(7), -- hex color code like #FF5733
-  is_habit_trackable BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT NOW(),
-  
-  -- RESTRICT prevents accidental user deletion if they have items
-  CONSTRAINT fk_planner_items_user 
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
-);
-
--- Day templates (saved routines) - PRESERVE DATA
-CREATE TABLE day_templates (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  description TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  
-  CONSTRAINT fk_day_templates_user 
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT
-);
-
--- Actual days (specific dates planned) - PRESERVE DATA
-CREATE TABLE actual_days (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL,
-  date DATE NOT NULL,
-  template_id UUID,
-  notes TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  
-  CONSTRAINT fk_actual_days_user 
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_actual_days_template 
-    FOREIGN KEY (template_id) REFERENCES day_templates(id) ON DELETE SET NULL,
-  
-  -- One record per user per date
-  UNIQUE(user_id, date)
-);
-
--- Scheduled items (items with times on specific days) - CASCADE with day
-CREATE TABLE scheduled_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  day_id UUID NOT NULL,
-  item_id UUID NOT NULL,
-  start_time TIME NOT NULL,
-  duration INTEGER NOT NULL, -- minutes
-  custom_name VARCHAR(255), -- override item name for this day
-  completed BOOLEAN DEFAULT FALSE,
-  completed_at TIMESTAMP,
-  order_position INTEGER,
-  
-  -- CASCADE because scheduled items have no value without the day
-  CONSTRAINT fk_scheduled_items_day 
-    FOREIGN KEY (day_id) REFERENCES actual_days(id) ON DELETE CASCADE,
-  -- SET NULL preserves schedule even if item is deleted
-  CONSTRAINT fk_scheduled_items_item 
-    FOREIGN KEY (item_id) REFERENCES planner_items(id) ON DELETE SET NULL
-);
-
--- Indexes for better query performance
-CREATE INDEX idx_user_preferences_user_id ON user_preferences(user_id);
 CREATE INDEX idx_user_enabled_plugins_user_id ON user_enabled_plugins(user_id);
-CREATE INDEX idx_planner_items_user_id ON planner_items(user_id);
-CREATE INDEX idx_actual_days_user_date ON actual_days(user_id, date);
-CREATE INDEX idx_scheduled_items_day_id ON scheduled_items(day_id);
-CREATE INDEX idx_scheduled_items_start_time ON scheduled_items(start_time);
+CREATE INDEX idx_user_enabled_plugins_plugin_id ON user_enabled_plugins(plugin_id);
+
+-- ============================================================================
+-- END OF INITIAL SCHEMA
+-- ============================================================================

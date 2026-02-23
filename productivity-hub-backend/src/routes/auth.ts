@@ -98,14 +98,34 @@ router.post('/register',
       const user = newUser.rows[0];
 
       // Create default preferences
+      // Get default light theme ID
+      const defaultThemeResult = await pool.query(`
+        SELECT id FROM themes WHERE name = 'light-default' LIMIT 1
+      `);
+      const defaultThemeId = defaultThemeResult.rows[0].id;
+
+      // Create user preferences with default theme
       await pool.query(`
-        INSERT INTO user_preferences (user_id, current_theme, enabled_themes, updated_at)
-        VALUES ($1, $2, $3, NOW())
-      `, [
-        user.id, 
-        'light-default',
-        JSON.stringify(['light-default', 'dark-default'])
-      ]);
+        INSERT INTO user_preferences (user_id, current_theme_id, updated_at)
+        VALUES ($1, $2, NOW())
+      `, [user.id, defaultThemeId]);
+
+      // Enable default themes for new user (light + dark)
+      await pool.query(`
+        INSERT INTO user_enabled_themes (user_id, theme_id, enabled_at)
+        SELECT $1, id, NOW()
+        FROM themes
+        WHERE is_default = true
+      `, [user.id]);
+
+      // Enable default plugins for new user
+      await pool.query(`
+        INSERT INTO user_enabled_plugins (user_id, plugin_id, enabled_at, settings)
+        SELECT $1, id, NOW(), '{}'
+        FROM plugins
+        WHERE is_default = true
+      `, [user.id]);
+      console.log('✅ Enabled plugins created');
 
       // Send verification email
       await emailService.sendVerificationEmail(email, name, verificationToken);
